@@ -34,8 +34,9 @@ def train(op):
     #     cudnn.benchmark = True
     train_dataset = PlayDataset(is_train=True, train_val=0.9, transform=transform_test)
     trainloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=8)
-    test_dataset = PlayDataset(is_train=False, train_val=0.9, transform=transform_test)
-    testloader = DataLoader(test_dataset, batch_size=10, shuffle=True, num_workers=8)
+
+    testdataset = PlayDataset(is_train=False, train_val=0.9, transform=transform_test)
+    testloader = DataLoader(testdataset, batch_size=16, shuffle=True, num_workers=8)
 
     if 'CTC' in op.Prediction:
         criterion = torch.nn.CTCLoss(zero_infinity=True).to(device)
@@ -101,8 +102,6 @@ def train(op):
                 '''查看输出的大小值'''
                 # print('inputs.shape',inputs.shape())
                 # print('\n targets.shape',targets.shape())
-
-
                 # '''计算正确率 写的计算正确率是不是有问题 肯定是有问题'''
                 # y_pred_labels = []
                 # for sample in preds:
@@ -114,26 +113,17 @@ def train(op):
                 # for pred, label in zip(y_pred_labels, targets.tolist()):
                 #     if (pred == label):
                 #         correct += 1
-
                 preds = preds.permute(1, 0, 2)
                 length = sample_batch['real_length']
                 cost = criterion(preds, targets, preds_size.to(device), length.to(device))
                 test_loss += cost.item()
                 total += targets.size(0)
-
-
             sample = preds.permute(1, 0, 2)[0]
             _, predicted = sample.max(1)
             print(predicted)
             print(targets[0])
             print(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-
-
-
-
-
 
     # save model
     state = {
