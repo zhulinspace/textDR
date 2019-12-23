@@ -1,5 +1,6 @@
 import torch
-from config import  config
+from config import opt
+
 # 在train.py 里.to(device)
 '''
 要将dict.txt转为 list(character)
@@ -7,9 +8,11 @@ from config import  config
 class CTCLabelConverter(object):
     """ Convert between text-label and text-index """
 
-    def __init__(self, character):
-        # character (str): set of the possible characters.
-        dict_character = list(character)
+    def __init__(self, dict_path):
+        # dict.path 字典路径
+        with open(dict_path, 'r')as f:
+            lines = f.readlines()
+            dict_character = [i.rstrip() for i in lines]
 
         self.dict = {}
         for i, char in enumerate(dict_character):
@@ -56,8 +59,10 @@ class CTCLabelConverter(object):
 class AttnLabelConverter(object):
     """ Convert between text-label and text-index """
 
-    def __init__(self, character):
-        # character (str): set of the possible characters.
+    def __init__(self, dict_path):
+        with open(dict_path, 'r')as f:
+            lines = f.readlines()
+            character = [i.rstrip() for i in lines]
         # [GO] for the start token of the attention decoder. [s] for end-of-sentence token.
         list_token = ['[GO]', '[s]']  # ['[s]','[UNK]','[PAD]','[GO]']
         list_character = list(character)
@@ -88,7 +93,9 @@ class AttnLabelConverter(object):
             text.append('[s]')
             text = [self.dict[char] for char in text]
             batch_text[i][1:1 + len(text)] = torch.LongTensor(text)  # batch_text[:, 0] = [GO] token
-        return (batch_text.to(device), torch.IntTensor(length).to(device))
+        # return (batch_text.to(device), torch.IntTensor(length).to(device))
+        return (batch_text, torch.IntTensor(length))
+
 
     def decode(self, text_index, length):
         """ convert text-index into text-label. """
@@ -97,3 +104,15 @@ class AttnLabelConverter(object):
             text = ''.join([self.character[i] for i in text_index[index, :]])
             texts.append(text)
         return texts
+
+if __name__ == '__main__':
+
+    with open(opt.dict_path, 'r')as f:
+        lines = f.readlines()
+        character=[i.rstrip() for i in lines]
+    print(character)
+
+    #tset
+    ch='abcdeffghijklmnopqrst'
+    test=list(ch)
+    print(test)
