@@ -23,8 +23,8 @@ class PlayDataset(Dataset):
         '''
 
         self.max_label_length=max_label_length
-        # self.img_label_list=self.read_text_file(opt.text_txt_path)
-        self.img_label_list=self.read_num_file(opt.num_txt_path)
+        self.img_label_list=self.read_text_file(opt.text_txt_path)
+        # self.img_label_list=self.read_num_file(opt.num_txt_path)
 
 
         self.is_train = is_train
@@ -39,9 +39,9 @@ class PlayDataset(Dataset):
             for line in lines:
                 content = line.rstrip().split(' ')
                 imgdir = content[0]
-                labels = []
-                for value in content[1:]:
-                    labels.append(str(value))
+                labels = content[1]
+                # for value in content[1:]:
+                #     labels.append(str(value))
                 img_label_list.append((imgdir, labels))
         # print('img_lable_list',img_label_list)
         return img_label_list
@@ -83,7 +83,7 @@ class PlayDataset(Dataset):
 
         img_path,real_label = self.img_label_list[idx]
         # print('imgpath',img_path)
-        # print('real_label',type(real_label))
+        # print('real_label',real_label)
 
         if opt.img_rgb:
             image=Image.open(img_path)
@@ -95,12 +95,12 @@ class PlayDataset(Dataset):
             image = self.transform(image)
 
         '''num_txt:'''
-        label = np.zeros((self.max_label_length))
-        for idx,num in enumerate(real_label):
-            label[idx]=num
+        # label = np.zeros((self.max_label_length))
+        # for idx,num in enumerate(real_label):
+        #     label[idx]=num
 
         '''text_txt'''
-        # label=real_label
+        label=real_label
 
         sample = {
             'image': image,
