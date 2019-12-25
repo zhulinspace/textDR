@@ -9,12 +9,12 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from utils.make_txt_dict import get_dict
-from config import opt
+import argparse
 
 
 class PlayDataset(Dataset):
 
-    def __init__(self, is_train=True, train_val=0.9, transform=None,max_label_length=35):
+    def __init__(self, opt,is_train=True, train_val=0.9, transform=None,max_label_length=35):
         #max_label_length为最大的标签长度 即getitem()中的label是要求shape一样
 
         '''
@@ -25,6 +25,7 @@ class PlayDataset(Dataset):
         self.max_label_length=max_label_length
         self.img_label_list=self.read_text_file(opt.text_txt_path)
         # self.img_label_list=self.read_num_file(opt.num_txt_path)
+        self.img_rgb=opt.img_rgb
 
 
         self.is_train = is_train
@@ -85,7 +86,7 @@ class PlayDataset(Dataset):
         # print('imgpath',img_path)
         # print('real_label',real_label)
 
-        if opt.img_rgb:
+        if self.img_rgb:
             image=Image.open(img_path)
         else:
             image=Image.open(img_path).convert('L')
@@ -111,6 +112,7 @@ class PlayDataset(Dataset):
 
     
 if __name__ == "__main__":
+    #test
     '''
     目标是生成text_label 
     即从一个batch里取出来的大小是 [batch_size]
@@ -120,10 +122,14 @@ if __name__ == "__main__":
         transforms.Resize((32,640)),# h ,w
         transforms.ToTensor(),
     ])#scale是在PIL图片上基础上做的，即Totensor放在最后，另外Norm放在totensor之后
+    parser = argparse.ArgumentParser()
+    parser.add_argument('text_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/text_train.txt',help='text_txt_path')
+    parser.add_argument('--img_rgb',type=bool,default=False,help='whether is rgb')
+    opt = parser.parse_args()
 
 
 
-    dataset = PlayDataset(is_train=True, train_val=1, transform=transform_test)
+    dataset = PlayDataset(opt,is_train=True, train_val=1, transform=transform_test)
     dataloader = DataLoader(dataset, batch_size=10, shuffle=False, num_workers=8)
     for i, sample_batch in enumerate(dataloader):
         print(i, sample_batch['image'].shape)
