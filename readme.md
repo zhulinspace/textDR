@@ -1,6 +1,5 @@
 v_0
 ### 数据准备
-训练图片和测试图片放在同一个文件夹中，另图片名称是图片文字标签
 命令行运行以下命令
 ```
 python make_txt_dict.py --dict_path dict_path --img_dir img_dir --num_txt_path num_txt_path /
