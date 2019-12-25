@@ -1,16 +1,18 @@
 import torch
-from config import opt
 
-# 在train.py 里.to(device)
+
+
 '''
 要将dict.txt转为 list(character)
 '''
 class CTCLabelConverter(object):
     """ Convert between text-label and text-index """
 
-    def __init__(self, dict_path):
+    def __init__(self, opt):
         # dict.path 字典路径
-        with open(dict_path, 'r')as f:
+        self.dict_path=opt.dict_path
+        self.device=opt.device
+        with open(self.dict_path, 'r')as f:
             lines = f.readlines()
             dict_character = [i.rstrip() for i in lines]
 
@@ -59,8 +61,10 @@ class CTCLabelConverter(object):
 class AttnLabelConverter(object):
     """ Convert between text-label and text-index """
 
-    def __init__(self, dict_path):
-        with open(dict_path, 'r')as f:
+    def __init__(self, opt):
+        self.dict_path=opt.dict_path
+        self.device=opt.device
+        with open(self.dict_path, 'r')as f:
             lines = f.readlines()
             character = [i.rstrip() for i in lines]
         # [GO] for the start token of the attention decoder. [s] for end-of-sentence token.
@@ -94,7 +98,7 @@ class AttnLabelConverter(object):
             text = [self.dict[char] for char in text]
             batch_text[i][1:1 + len(text)] = torch.LongTensor(text)  # batch_text[:, 0] = [GO] token
         # return (batch_text.to(device), torch.IntTensor(length).to(device))
-        return (batch_text, torch.IntTensor(length))
+        return (batch_text.to(self.device), torch.IntTensor(length).to(self.device))
 
 
     def decode(self, text_index, length):
@@ -105,14 +109,35 @@ class AttnLabelConverter(object):
             texts.append(text)
         return texts
 
+
+class Averager(object):
+    """Compute average for torch.Tensor, used for loss average."""
+
+    def __init__(self):
+        self.reset()
+
+    def add(self, v):
+        count = v.data.numel()
+        v = v.data.sum()
+        self.n_count += count
+        self.sum += v
+
+    def reset(self):
+        self.n_count = 0
+        self.sum = 0
+
+    def val(self):
+        res = 0
+        if self.n_count != 0:
+            res = self.sum / float(self.n_count)
+        return res
+
 if __name__ == '__main__':
 
-    with open(opt.dict_path, 'r')as f:
+
+    dict_path=r'/home/luoyc/zhulin/textDR/utils/dict.txt'
+    with open(dict_path, 'r')as f:
         lines = f.readlines()
         character=[i.rstrip() for i in lines]
     print(character)
 
-    #tset
-    ch='abcdeffghijklmnopqrst'
-    test=list(ch)
-    print(test)
