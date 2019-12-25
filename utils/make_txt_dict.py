@@ -2,7 +2,6 @@ import os
 import glob
 import cv2
 import argparse
-from config import opt
 
 def get_dict(dict_path):
     '''
@@ -45,7 +44,6 @@ def make_txt(opt):
 
     jpgfile = glob.glob(pathname=os.path.join(img_dir,'*.jpg'))
     length = len(jpgfile)
-    print(length)
     num_txt=open(num_txt_path,'w')
     text_txt=open(text_txt_path,'w')
     for filename in jpgfile:
@@ -70,7 +68,7 @@ def make_txt(opt):
         '''去掉过长标签等'''
 
 
-    #print('len',length)
+    print('nums of images',length)
     num_txt.close()
     text_txt.close()
 
@@ -78,6 +76,14 @@ def make_txt(opt):
 
 if __name__=='__main__':
     #test
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--dict_path', type=str, default=r'/home/luoyc/zhulin/textDR/utils/dict.txt', help='dict path')
+    parser.add_argument('--img_dir', type=str, default=r'/home/luoyc/zhulin/img_crop', help='the image folder dir')
+    parser.add_argument('--num_txt_path', type=str, default=r'/home/luoyc/zhulin/textDR/utils/num_train.txt',
+                        help='num_txt_path')
+    parser.add_argument('--text_txt_path', type=str, default=r'/home/luoyc/zhulin/textDR/utils/text_train.txt',
+                        help='text_txt_path')
+    opt = parser.parse_args()
     make_txt(opt)
 
 
