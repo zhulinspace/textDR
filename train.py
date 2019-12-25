@@ -1,130 +1,60 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-import torch.backends.cudnn as cudnn
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
-import torchvision
+from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
-import itertools
 import os
 import time
 import argparse
-
+from test import validation
 from dataset import PlayDataset
 from model import Model
-from config import opt
+from utils.convert_lossavg import CTCLabelConverter,AttnLabelConverter,Averager
 
 import warnings
 warnings.filterwarnings("ignore")
 
-device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+# device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
 transform_test = transforms.Compose([
     transforms.Resize((32,640)),
     transforms.ToTensor()
 ])
 
-def train(op):
-    net = Model(op)
+def train(opt):
+    device=opt.device
+    net = Model(opt)
     net = net.to(device)
-    # if device == 'cuda':
-    #     net = torch.nn.DataParallel(net)
-    #     cudnn.benchmark = True
-    train_dataset = PlayDataset(is_train=True, train_val=0.9, transform=transform_test)
-    trainloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=8)
 
-    testdataset = PlayDataset(is_train=False, train_val=0.9, transform=transform_test)
-    testloader = DataLoader(testdataset, batch_size=16, shuffle=True, num_workers=8)
+    train_dataset = PlayDataset(opt,is_train=True, train_val=0.8, transform=transform_test,max_label_length=opt.max_label_length)
+    val_dataset = PlayDataset(opt,is_train=False, train_val=0.8, transform=transform_test,max_label_length=opt.max_label_length)
+    datasets={'train':train_dataset,'val':val_dataset}
 
-    if 'CTC' in op.Prediction:
+    dataloaders={phase:DataLoader(dataset=datasets[phase],batch_size=8,shuffle=True,num_workers=8) for phase in ['train','val']}
+
+    if 'CTC' in opt.Prediction:
         criterion = torch.nn.CTCLoss(zero_infinity=True).to(device)
+        converter=CTCLabelConverter(opt)
     else:
-        criterion=torch.nn.CrossEntropyLoss(ignore_index=0).to(device)
-
+        criterion=torch.nn.CrossEntroptyLoss(ignore_index=0).to(device)
+        converter=AttnLabelConverter(opt)
+    loss_avg = Averager()
     optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999))
 
+    start_epoch=0
+    min_val_loss=100000000
+    best_val_acc=-1
+
     '''加载部分权重模型'''
+    if opt.checkpoint:
+        checkpoint=torch.load(opt.checkpoint)
+        net.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        start_epoch=checkpoint['epoch']
+        min_val_loss=checkpoint['val_loss']
+        best_val_acc=checkpoint['val_acc']
+
 
     '''多gpu部分'''
-
-    for epoch in range(10000):
-        print('\nEpoch: %d' % epoch)
-        print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
-        net.train()
-        train_loss = 0.0
-        correct = 0
-        total = 0
-        for batch_idx, sample_batch in enumerate(trainloader):
-            inputs = sample_batch['image'].type(torch.FloatTensor).to(device)
-            targets = sample_batch['label'].type(torch.IntTensor).to(device)
-            preds = net(inputs, None).log_softmax(2)
-            preds_size = torch.IntTensor([preds.size(1)] * targets.shape[0])
-
-            # '''计算正确率'''
-            # y_pred_labels = []
-            # for sample in preds:
-            #     _, y = sample.max(1)
-            #     y = [int(k) for k, g in itertools.groupby(y)]  # 去掉重复的
-            #     while 0 in y:  # 去掉0
-            #         y.remove(0)
-            #     y_pred_labels.append(y)
-            # for pred, label in zip(y_pred_labels, targets.tolist()):
-            #     if (pred == label):
-            #         correct += 1
-
-            preds = preds.permute(1, 0, 2)
-            length = sample_batch['real_length']
-            cost = criterion(preds, targets, preds_size.to(device), length.to(device))
-            net.zero_grad()
-            cost.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 5)  # gradient clipping with 5 (Default)
-            optimizer.step()
-
-            train_loss += cost.item()
-            total += targets.size(0)
-
-
-        print(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
-        net.eval()
-        test_loss = 0
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for batch_idx, sample_batch in enumerate(testloader):
-                inputs = sample_batch['image'].type(torch.FloatTensor).to(device)
-                targets = sample_batch['label'].type(torch.IntTensor).to(device)
-                preds = net(inputs, None).log_softmax(2)
-                preds_size = torch.IntTensor([preds.size(1)] * targets.shape[0])
-                '''查看输出的大小值'''
-                # print('inputs.shape',inputs.shape())
-                # print('\n targets.shape',targets.shape())
-                # '''计算正确率 写的计算正确率是不是有问题 肯定是有问题'''
-                # y_pred_labels = []
-                # for sample in preds:
-                #     _, y = sample.max(1)
-                #     y = [int(k) for k, g in itertools.groupby(y)]  # 去掉重复的
-                #     while 0 in y:  # 去掉0
-                #         y.remove(0)
-                #     y_pred_labels.append(y)
-                # for pred, label in zip(y_pred_labels, targets.tolist()):
-                #     if (pred == label):
-                #         correct += 1
-                preds = preds.permute(1, 0, 2)
-                length = sample_batch['real_length']
-                cost = criterion(preds, targets, preds_size.to(device), length.to(device))
-                test_loss += cost.item()
-                total += targets.size(0)
-            sample = preds.permute(1, 0, 2)[0]
-            _, predicted = sample.max(1)
-            print(predicted)
-            print(targets[0])
-            print(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
-
     # save model
     state = {
             'net': net.state_dict(),
@@ -146,10 +76,21 @@ if __name__ == '__main__':
                         help='the number of output channel of Feature extractor')
     parser.add_argument('--hidden_size', type=int, default=256, help='the size of the LSTM hidden state')
 
-    parser.add_argument('--num_iter',type=int,default=10000,help='number of iterations to train for')
-    op = parser.parse_args()
-    op.num_class = 1557
-    train(op)
+    parser.add_argument('--max_label_length',type=int,default=35,help='the max lenghth of the label')
+    parser.add_argument('--epoch',type=int,default=100,help='number of iterations to train for')
+    parser.add_argument('--grad_clip',type=int,default=5,help='grad_clip')
+    parser.add_argument('--device',type=str,default='cuda:1',help='gpu device')
+    parser.add_argument('--img_rgb',type=bool,default=False,help='whether is rgb')
+    '''path'''
+    parser.add_argument('--dict_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/dict.txt',help='dict path')
+    parser.add_argument('--img_dir',type=str,default=r'/home/luoyc/zhulin/img_crop',help='the image folder dir')
+    parser.add_argument('--num_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/num_train.txt',help='num_txt_path')
+    parser.add_argument('text_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/text_train.txt',help='text_txt_path')
+    parser.add_argument('checkpoint',type=str,default=r'home/luoyc/zhulin/textDR/checkpoint/weights/',help='the path of the saved weights')
+
+    opt = parser.parse_args()
+    opt.num_class = 1556
+    train(opt)
 
 
 
