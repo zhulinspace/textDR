@@ -123,7 +123,7 @@ if __name__ == "__main__":
         transforms.ToTensor(),
     ])#scale是在PIL图片上基础上做的，即Totensor放在最后，另外Norm放在totensor之后
     parser = argparse.ArgumentParser()
-    parser.add_argument('text_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/text_train.txt',help='text_txt_path')
+    parser.add_argument('--text_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/text_train.txt',help='text_txt_path')
     parser.add_argument('--img_rgb',type=bool,default=False,help='whether is rgb')
     opt = parser.parse_args()
 

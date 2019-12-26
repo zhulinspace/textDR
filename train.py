@@ -21,9 +21,9 @@ transform_test = transforms.Compose([
 ])
 
 def train(opt):
-    device=opt.device
+
     net = Model(opt)
-    net = net.to(device)
+    net = net.to(opt.device)
 
     train_dataset = PlayDataset(opt,is_train=True, train_val=0.8, transform=transform_test,max_label_length=opt.max_label_length)
     val_dataset = PlayDataset(opt,is_train=False, train_val=0.8, transform=transform_test,max_label_length=opt.max_label_length)
@@ -32,10 +32,10 @@ def train(opt):
     dataloaders={phase:DataLoader(dataset=datasets[phase],batch_size=8,shuffle=True,num_workers=8) for phase in ['train','val']}
 
     if 'CTC' in opt.Prediction:
-        criterion = torch.nn.CTCLoss(zero_infinity=True).to(device)
+        criterion = torch.nn.CTCLoss(zero_infinity=True).to(opt.device)
         converter=CTCLabelConverter(opt)
     else:
-        criterion=torch.nn.CrossEntroptyLoss(ignore_index=0).to(device)
+        criterion=torch.nn.CrossEntroptyLoss(ignore_index=0).to(opt.device)
         converter=AttnLabelConverter(opt)
     loss_avg = Averager()
     optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999))
@@ -52,6 +52,49 @@ def train(opt):
         start_epoch=checkpoint['epoch']
         min_val_loss=checkpoint['val_loss']
         best_val_acc=checkpoint['val_acc']
+
+
+    '''train part'''
+    for epoch in range(start_epoch+1,opt.epoch):
+
+        for phase in ['train','val']:
+            if phase=='train':
+                net.train()
+                iters_per_epoch=len(dataloaders[phase])
+            else:
+                net.eval()
+
+            for i ,batch in enumerate(dataloaders[phase]):
+
+                images=batch['image'].to(opt.device)# images [b ,c,h,w]
+                labels=batch['label']#labels 1xb 字符数组
+                text,length=converter.encode(labels,batch_max_length=opt.max_label_length)
+                batch_size=images.size(0)
+
+                if 'CTC' in opt.Prediction:
+                    preds=net(images,text).log_softmax(2)#
+                    preds_size=torch.IntTensor([preds.size(1)]*batch_size) # 1xbatch_size
+                    preds=preds.permute(1,0,2)
+                    cost=criterion(preds,text.to(opt.device),preds_size.to(opt.device),length.to(opt.device))
+                else:
+                    preds=net(images,text[:,:-1])
+                    target=text[:,1:]
+                    cost=criterion(preds.view(-1, preds.shape[-1]), target.contiguous().view(-1))
+
+                net.zero_grad()
+                cost.backward()
+                torch.nn.utils.clip_grad_norm(net.parameters(),opt.grad_clip)
+                optimizer.step()
+                loss_avg.add(cost)
+                print('[Epoch {} iter {} / {}] loss: {}'.format(epoch, i, iters_per_epoch, loss_avg.item()))
+
+            with torch.no_grad():
+                valid_loss, current_accuracy, current_norm_ED, preds, confidence_score, labels, infer_time, length_of_data = validation(
+                    net, criterion, dataloaders['val'], converter, opt)
+            loss_log = f'[{i}/{opt.num_iter}] Train loss: {loss_avg.val():0.5f}, Valid loss: {valid_loss:0.5f}'
+            print(loss_log)
+
+
 
 
     '''多gpu部分'''
