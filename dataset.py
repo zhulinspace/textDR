@@ -130,9 +130,23 @@ if __name__ == "__main__":
 
 
     dataset = PlayDataset(opt,is_train=True, train_val=1, transform=transform_test)
-    dataloader = DataLoader(dataset, batch_size=10, shuffle=False, num_workers=8)
+    dataloader = DataLoader(dataset, batch_size=10, shuffle=False, num_workers=2)
     for i, sample_batch in enumerate(dataloader):
-        print(i, sample_batch['image'].shape)
-        print(i, sample_batch['label'])
+        # print(i, sample_batch['image'].shape)
+        # print(i, sample_batch['label'])
+        print(type(sample_batch['image']),type(sample_batch['label']))
+        # torch.tensor /list
         # print(i,sample_batch['real_length'].shape)
+
+    # 通过迭代器来分次获得数据
+    # for i in range(10):
+    #     sample_batch=iter(dataloader)
+    #     test=next(sample_batch)
+    #     # print(type(sample_batch),type(test))
+    #     print(test['image'].shape)
+    #     print(test['label'])
+    #     print(type(test['image']),type(test['label']))
+    #     # torch.Tensor/ list
+
+
 
