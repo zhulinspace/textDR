@@ -10,10 +10,12 @@ from dataset import PlayDataset
 from model import Model
 from utils.convert_lossavg import CTCLabelConverter,AttnLabelConverter,Averager
 
+device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+
 import warnings
 warnings.filterwarnings("ignore")
 
-# device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+
 
 transform_test = transforms.Compose([
     transforms.Resize((32,640)),
@@ -23,7 +25,7 @@ transform_test = transforms.Compose([
 def train(opt):
 
     net = Model(opt)
-    net = net.to(opt.device)
+    net = net.to(device)
 
     train_dataset = PlayDataset(opt,is_train=True, train_val=0.9, transform=transform_test,max_label_length=opt.max_label_length)
     val_dataset = PlayDataset(opt,is_train=False, train_val=0.9, transform=transform_test,max_label_length=opt.max_label_length)
@@ -32,10 +34,10 @@ def train(opt):
     val_dataloader=DataLoader(val_dataset,batch_size=32,shuffle=True,num_workers=8)
 
     if 'CTC' in opt.Prediction:
-        criterion = torch.nn.CTCLoss(zero_infinity=True).to(opt.device)
+        criterion = torch.nn.CTCLoss(zero_infinity=True).to(device)
         converter=CTCLabelConverter(opt)
     else:
-        criterion=torch.nn.CrossEntroptyLoss(ignore_index=0).to(opt.device)
+        criterion=torch.nn.CrossEntropyLoss(ignore_index=0).to(device)
         converter=AttnLabelConverter(opt)
     loss_avg = Averager()
     optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999))
@@ -70,7 +72,7 @@ def train(opt):
         batch_iter=iter(train_dataloader)
         batch=next(batch_iter)
 
-        images = batch['image'].to(opt.device)  # images [b ,c,h,w]
+        images = batch['image'].to(device)  # images [b ,c,h,w]
         labels = batch['label']  # labels 1xb 字符数组
         text, length = converter.encode(labels, batch_max_length=opt.max_label_length)
         batch_size = images.size(0)
@@ -79,7 +81,8 @@ def train(opt):
             preds = net(images, text).log_softmax(2)  #
             preds_size = torch.IntTensor([preds.size(1)] * batch_size)  # 1xbatch_size
             preds = preds.permute(1, 0, 2)
-            cost = criterion(preds, text.to(opt.device), preds_size.to(opt.device), length.to(opt.device))
+            cost = criterion(preds.to(device), text, preds_size.to(device), length)
+            # cudnn wants the targets and the length on cpu ,not gpu
         else:
             preds = net(images, text[:, :-1])
             target = text[:, 1:]
@@ -107,8 +110,31 @@ def train(opt):
         current_model_log = f'{"Current_accuracy":17s}: {current_accuracy:0.3f}, {"Current_norm_ED":17s}: {current_norm_ED:0.2f}'
         print(current_model_log)
 
+        if current_accuracy>best_val_acc:
+            best_val_acc=current_accuracy
+            torch.save(model.state_dict(),f'./checkpoint/{opt.exp_name}/best_acc.pth')
+        if valid_loss<min_val_loss:
+            min_val_loss=valid_loss
+
+        print("best_acc_val:",best_val_acc,"   min_valid_loss:",min_val_loss)
+
+        '''show some result'''
+        print('-' * 80)
+        print(f'{"Ground Truth":25s} | {"Prediction":25s} | Confidence Score & T/F')
+        log.write(f'{"Ground Truth":25s} | {"Prediction":25s} | {"Confidence Score"}\n')
+        print('-' * 80)
+        for gt, pred, confidence in zip(labels[:5], preds[:5], confidence_score[:5]):
+            if 'Attn' in opt.Prediction:
+                gt = gt[:gt.find('[s]')]
+                pred = pred[:pred.find('[s]')]
+
+            print(f'{gt:25s} | {pred:25s} | {confidence:0.4f}\t{str(pred == gt)}')
+            log.write(f'{gt:25s} | {pred:25s} | {confidence:0.4f}\t{str(pred == gt)}\n')
+        print('-' * 80)
+
     if (i+1)%1e+5==0:
         torch.save(
+
             model.state_dict(),f'./checkpoint/{opt.exp_name}/iter_{i+1}.pth'
         )
     if i==opt.num_iter:
@@ -131,24 +157,26 @@ if __name__ == '__main__':
     parser.add_argument('--Transformation', type=str, default="None", help='Transformation stage. None|TPS')
     parser.add_argument('--FeatureExtraction', type=str, default="ResNet", help='FeatureExtraction stage. VGG|ResNet')
     parser.add_argument('--SequenceModeling', type=str, default="BiLSTM", help='SequenceModeling stage. None|BiLSTM')
-    parser.add_argument('--Prediction', type=str, default="CTC", help='Prediction stage. CTC|Attn')
+    parser.add_argument('--Prediction', type=str, default="Attn", help='Prediction stage. CTC|Attn')
     parser.add_argument('--input_channel', type=int, default=1, help='the number of input channel of Feature extractor')
     parser.add_argument('--output_channel', type=int, default=512,
                         help='the number of output channel of Feature extractor')
     parser.add_argument('--hidden_size', type=int, default=256, help='the size of the LSTM hidden state')
+    '''other'''
     parser.add_argument('--exp_name',help='where to store model')
     parser.add_argument('--max_label_length',type=int,default=35,help='the max lenghth of the label')
     parser.add_argument('--num_iter',type=int,default=30000,help='number of iterations to train for')
     parser.add_argument('--grad_clip',type=int,default=5,help='grad_clip')
-    parser.add_argument('--device',type=str,default='cuda:1',help='gpu device')
     parser.add_argument('--img_rgb',type=bool,default=False,help='whether is rgb')
+    parser.add_argument('--checkpoint', type=str, default=r'home/luoyc/zhulin/textDR/checkpoint',
+                        help='the path of the saved weights')
+    parser.add_argument('--valInteravl', type=int, default=300, help='the val Interavl')
     '''path'''
     parser.add_argument('--dict_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/dict.txt',help='dict path')
     parser.add_argument('--img_dir',type=str,default=r'/home/luoyc/zhulin/img_crop',help='the image folder dir')
     parser.add_argument('--num_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/num_train.txt',help='num_txt_path')
     parser.add_argument('--text_txt_path',type=str,default=r'/home/luoyc/zhulin/textDR/utils/text_train.txt',help='text_txt_path')
-    parser.add_argument('--checkpoint',type=str,default=r'home/luoyc/zhulin/textDR/checkpoint',help='the path of the saved weights')
-    parser.add_argument('--valInteravl',type=int,default=300,help='the val Interavl')
+
     opt = parser.parse_args()
     opt.num_class = 1556
     if not opt.exp_name:
