@@ -2,7 +2,7 @@ import os
 import glob
 import cv2
 import argparse
-
+import numpy as np
 def get_dict(dict_path):
     '''
     生成字典
@@ -49,9 +49,19 @@ def make_txt(opt):
     for filename in jpgfile:
         label=os.path.split(filename)[1].rstrip()
         label=os.path.splitext(label)[0].rstrip() #中文label
-        img_path=os.path.join(img_dir,filename)
-        num_txt.write(img_path)
-        text_txt.write(img_path)
+
+
+        '''去掉无法读取的图片'''
+        img = cv2.imdecode(np.fromfile(filename , dtype=np.uint8), 1)
+        if img is None:
+            print("img is None")
+            continue
+
+        '''去掉过长标签等'''
+        pass
+
+        num_txt.write(filename)
+        text_txt.write(filename)
         text_txt.write(' ')
         text_txt.write(label)
         text_txt.write('\n')
@@ -60,12 +70,7 @@ def make_txt(opt):
             num_txt.write(str(char2num_dict[char]))
         num_txt.write('\n')
 
-        '''去掉无法读取的图片'''
-        img=cv2.imread(img_path)
-        if img is None:
-            continue
 
-        '''去掉过长标签等'''
 
 
     print('nums of images',length)
