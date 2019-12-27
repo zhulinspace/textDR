@@ -1,6 +1,6 @@
 import torch
 
-
+device = 'cuda:1' if torch.cuda.is_available() else 'cpu'
 
 '''
 要将dict.txt转为 list(character)
@@ -11,7 +11,7 @@ class CTCLabelConverter(object):
     def __init__(self, opt):
         # dict.path 字典路径
         self.dict_path=opt.dict_path
-        self.device=opt.device
+
         with open(self.dict_path, 'r')as f:
             lines = f.readlines()
             dict_character = [i.rstrip() for i in lines]
@@ -63,7 +63,7 @@ class AttnLabelConverter(object):
 
     def __init__(self, opt):
         self.dict_path=opt.dict_path
-        self.device=opt.device
+
         with open(self.dict_path, 'r')as f:
             lines = f.readlines()
             character = [i.rstrip() for i in lines]
@@ -98,7 +98,7 @@ class AttnLabelConverter(object):
             text = [self.dict[char] for char in text]
             batch_text[i][1:1 + len(text)] = torch.LongTensor(text)  # batch_text[:, 0] = [GO] token
         # return (batch_text.to(device), torch.IntTensor(length).to(device))
-        return (batch_text.to(self.device), torch.IntTensor(length).to(self.device))
+        return (batch_text.to(device), torch.IntTensor(length).to(device))
 
 
     def decode(self, text_index, length):

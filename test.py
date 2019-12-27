@@ -12,7 +12,7 @@ from nltk.metrics.distance import edit_distance
 
 from utils.convert_lossavg import CTCLabelConverter, AttnLabelConverter, Averager
 from model import Model
-# device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 
 def validation(model, criterion, evaluation_loader, converter, opt):
@@ -22,7 +22,7 @@ def validation(model, criterion, evaluation_loader, converter, opt):
     length_of_data = 0
     infer_time = 0
     valid_loss_avg = Averager()
-    device=opt.device
+
 
     for i, (image_tensors, labels) in enumerate(evaluation_loader):
         batch_size = image_tensors.size(0)
@@ -110,11 +110,11 @@ def test(opt):
     print('model input parameters', opt.imgH, opt.imgW, opt.num_fiducial, opt.input_channel, opt.output_channel,
           opt.hidden_size, opt.num_class, opt.batch_max_length, opt.Transformation, opt.FeatureExtraction,
           opt.SequenceModeling, opt.Prediction)
-    model = torch.nn.DataParallel(model).to(opt.device)
+    model = torch.nn.DataParallel(model).to(device)
 
     # load model
     print('loading pretrained model from %s' % opt.saved_model)
-    model.load_state_dict(torch.load(opt.saved_model, map_location=opt.device))
+    model.load_state_dict(torch.load(opt.saved_model, map_location=device))
     opt.experiment_name = '_'.join(opt.saved_model.split('/')[1:])
     # print(model)
 
@@ -124,9 +124,9 @@ def test(opt):
 
     """ setup loss """
     if 'CTC' in opt.Prediction:
-        criterion = torch.nn.CTCLoss(zero_infinity=True).to(opt.device)
+        criterion = torch.nn.CTCLoss(zero_infinity=True).to(device)
     else:
-        criterion = torch.nn.CrossEntropyLoss(ignore_index=0).to(opt.device)  # ignore [GO] token = ignore index 0
+        criterion = torch.nn.CrossEntropyLoss(ignore_index=0).to(device)  # ignore [GO] token = ignore index 0
 
     """ evaluation """
     model.eval()
