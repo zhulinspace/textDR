@@ -36,7 +36,7 @@ python train.py --FeatureExtraction ResNet --SequenceModeling BiLSTM --Predictio
 ```
 
 ps:预测方式选择attn时出现CUBLAS_STATUS_INTERNAL_ERROR
-参考('cublas runtime error' for (not so large) *fp16* matrix multiplication #24018)[https://github.com/pytorch/pytorch/issues/24018]
+参考['cublas runtime error' for (not so large) *fp16* matrix multiplication #24018](https://github.com/pytorch/pytorch/issues/24018)
 需要cuda10.1 release 版本 但是现在该版本并没有出来 
 
 
