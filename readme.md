@@ -32,9 +32,11 @@ self.img_label_list=self.read_num_file(opt.num_txt_path)
 ### 训练
 命令行运行以下命令修改模型配置
 ```
-python train.py --FeatureExtraction ResNet --SequenceModeling BiLSTM --Prediction Attn
+python train.py --FeatureExtraction ResNet --SequenceModeling BiLSTM --Prediction CTC
 ```
 
-
+ps:预测方式选择attn时出现CUBLAS_STATUS_INTERNAL_ERROR
+参考('cublas runtime error' for (not so large) *fp16* matrix multiplication #24018)[https://github.com/pytorch/pytorch/issues/24018]
+需要cuda10.1 release 版本 但是现在该版本并没有出来 
 
 
